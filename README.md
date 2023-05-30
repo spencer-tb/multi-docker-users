@@ -3,14 +3,17 @@
 This repository contains a script that automates the setup of an isolated
 Docker daemon for a user.
 
-It allows different users to run use there own isolated Docker instances,
+It allows different users to use there own isolated Docker instance,
 as opposed to sharing one instance between multiple users.
 
-We are required to do this, as we are using separate
-[hive](https://github.com/ethereum/hive) instances per user.
+To give you an example, we are required to do this, as we are using separate
+[hive](https://github.com/ethereum/hive) instances per user on our server. Hive
+uses docker containers for each of its simulations hence we may disrupt another users
+simulation if we are sharing a docker instance (daemon).
 
 
 ## Usage
+
 From your user account on the server, follow these instructions.
 
 
@@ -20,12 +23,10 @@ Add the following line to your bashrc.
 ```bash
 export DOCKER_HOST=unix:///var/run/docker-$USER.sock
 ```
-
 Refresh bashrc:
 ```bash
 source .bashrc
 ```
-
 This forces your docker host to point to your own unique docker socket.
 
 
