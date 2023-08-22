@@ -17,7 +17,9 @@ simulation if we are sharing a docker instance (daemon).
 From your user account on the server, follow these instructions.
 
 
-### Update your bashrc (or equivalent)
+### New Users
+
+#### Update your bashrc (or equivalent)
 
 Add the following line to your bashrc.
 ```bash
@@ -30,7 +32,7 @@ source .bashrc
 This forces your docker host to point to your own unique docker socket.
 
 
-### Run the script
+#### Run the script
 
 The remaining magic is done within the following script.
 ```bash
@@ -40,4 +42,16 @@ chmod +x setup_user_docker.sh
 ./setup_user_docker.sh
 ```
 
+### Resetting Docker
+
+To refresh & reset your docker users docker instance.
+```bash
+docker system prune -a
+```
+This will remove all stopped containers and the created user bridge.
+
+Re-run the script:
+```bash
+./setup_user_docker.sh
+```
 

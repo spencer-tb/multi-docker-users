@@ -2,6 +2,8 @@
 USERNAME=$USER
 DOCKERD_CONFIG_DIR=/etc/docker/$USERNAME
 DOCKERD_SERVICE=/etc/systemd/system/docker-$USERNAME.service
+DOCKER_SOCKET=/var/run/docker-$USERNAME.sock
+USER_NETWORK_NAME=docker_bridge_$USERNAME
 
 # Create the Docker configuration directory for the user
 sudo mkdir -p $DOCKERD_CONFIG_DIR
@@ -51,14 +53,17 @@ else
     exit 1
 fi
 
+# Set up user-specific Docker bridge network
+DOCKER_HOST="unix://$DOCKER_SOCKET" docker network create --driver bridge $USER_NETWORK_NAME
+
 # Test Docker by running a container
-container_id=$(docker run -d hello-world)
+container_id=$(DOCKER_HOST="unix://$DOCKER_SOCKET" docker run -d hello-world)
 
 # Wait for the container to start
 sleep 3
 
 # Check the status of the container
-container_status=$(docker ps -aq --filter "id=$container_id")
+container_status=$(DOCKER_HOST="unix://$DOCKER_SOCKET" docker ps -aq --filter "id=$container_id")
 
 if [ -n "$container_status" ]; then
     # Remove the hello world container
