@@ -1,0 +1,59 @@
+# ansible-playbook -i inventory.ini setup_new_user.yml --extra-vars "username=myuser"
+---
+- name: Add a new user to the server
+  hosts: all
+  become: yes
+  gather_facts: true
+
+  vars_prompt:
+      - name: "password"
+        prompt: "Enter the password for the new user"
+        private: yes
+        encrypt: "sha512_crypt"
+        confirm: yes
+        salt_size: 7
+
+      - name: "public_key"
+        prompt: "Enter the public SSH key for the new user"
+        private: no
+
+  tasks:
+      - name: Ensure all required variables are provided
+        assert:
+            that:
+                - username | length > 0
+                - password | length > 0
+                - public_key | length > 0
+            msg: "All of username, password, and public_key must be provided."
+
+      - name: Create a new user
+        user:
+            name: "{{ username }}"
+            password: "{{ password }}"
+            shell: "/bin/bash"
+            createhome: yes
+            state: present
+
+      - name: Add the user to sudoers
+        lineinfile:
+            path: "/etc/sudoers"
+            line: "{{ username }} ALL=(ALL) NOPASSWD:ALL"
+            state: present
+            validate: "visudo -cf %s"
+
+      - name: Ensure SSH directory exists for the user
+        file:
+            path: "/home/{{ username }}/.ssh"
+            state: directory
+            owner: "{{ username }}"
+            group: "{{ username }}"
+            mode: "0700"
+
+      - name: Add public SSH key to authorized_keys
+        authorized_key:
+            user: "{{ username }}"
+            state: present
+            key: "{{ public_key }}"
+
+      - name: Run Docker setup tasks
+        import_tasks: docker_setup_tasks.yml

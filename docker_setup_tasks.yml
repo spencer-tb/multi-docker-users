@@ -1,0 +1,122 @@
+# Used within setup_new_user.yml, config_single_docker_user.yml and config_multi_docker_users.yml
+---
+- set_fact:
+      rc_files:
+          - ".bashrc"
+          - ".zshrc"
+      fish_config: ".config/fish/config.fish"
+
+- name: "{{ username }}: Check that username variable is provided"
+  assert:
+      that:
+          - username is defined
+          - username | length > 0
+      fail_msg: "'username' variable is not provided or empty"
+
+- name: "{{ username }}: Check if the user exists on the server"
+  command: "getent passwd {{ username }}"
+  register: getent_output
+  failed_when: getent_output.rc != 0
+  changed_when: false
+
+- name: "{{ username }}: Add {{ username }} to sudo and docker groups"
+  user:
+      name: "{{ username }}"
+      groups: sudo,docker
+      append: yes
+
+- name: "{{ username }}: Check if user-specific docker daemon exists"
+  command: "systemctl is-enabled docker-{{ username }}"
+  register: docker_service_check
+  failed_when: docker_service_check.rc != 0 and 'No such file or directory' not in docker_service_check.stderr
+  changed_when: false
+
+- name: "{{ username }}: Stop user-specific docker daemon"
+  systemd:
+      name: "docker-{{ username }}"
+      state: stopped
+  when: docker_service_check.rc == 0
+
+- name: "{{ username }}: Set DOCKER_HOST in .bashrc and .zshrc files for user"
+  become_user: "{{ username }}"
+  lineinfile:
+      path: "/home/{{ username }}/{{ item }}"
+      line: "export DOCKER_HOST=unix:///var/run/docker-{{ username }}.sock"
+      regexp: "^export DOCKER_HOST=.*$"
+      state: present
+      create: yes
+  loop: "{{ rc_files }}"
+
+- name: "{{ username }}: Set DOCKER_HOST in config.fish for user"
+  become_user: "{{ username }}"
+  lineinfile:
+      path: "/home/{{ username }}/{{ fish_config }}"
+      line: "set -gx DOCKER_HOST unix:///var/run/docker-{{ username }}.sock"
+      regexp: "^set -gx DOCKER_HOST .*"
+      state: present
+      create: true
+
+- name: "{{ username }}: Remove user-specific docker directory"
+  file:
+      path: "/var/lib/docker-{{ username }}"
+      state: absent
+
+- name: "{{ username }}: Remove existing user-specific daemon.json"
+  file:
+      path: "/etc/docker/{{ username }}/daemon.json"
+      state: absent
+
+- name: "{{ username }}: Ensure docker directory for user exists"
+  file:
+      path: "/etc/docker/{{ username }}"
+      state: directory
+      owner: "{{ username }}"
+      group: "{{ username }}"
+      mode: "0755"
+
+- name: "{{ username }}: Set up new docker daemon.json for user"
+  template:
+      src: "docker_daemon.json.j2"
+      dest: "/etc/docker/{{ username }}/daemon.json"
+      owner: "{{ username }}"
+      group: "{{ username }}"
+      mode: "0644"
+
+- name: "{{ username }}: Remove user-specific docker service file"
+  file:
+      path: "/etc/systemd/system/docker-{{ username }}.service"
+      state: absent
+
+- name: "{{ username }}: Set up new systemd service for Docker for user"
+  template:
+      src: "docker_service.j2"
+      dest: "/etc/systemd/system/docker-{{ username }}.service"
+      owner: "{{ username }}"
+      group: "{{ username }}"
+      mode: "0644"
+
+- name: "{{ username }}: Check if IP link exists and delete if it does"
+  shell: "ip link show {{ username }} && ip link delete {{ username }}"
+  ignore_errors: true
+  failed_when: false
+
+- name: "{{ username }}: Create bridge to match docker config for username"
+  shell: "ip link add name {{ username }} type bridge && ip link set up dev {{ username }}"
+
+- name: "{{ username }}: Restart and enable the Docker daemon for user"
+  systemd:
+      name: "docker-{{ username }}"
+      state: restarted
+      enabled: yes
+
+- name: "{{ username }}: Set permissions for the custom Docker socket"
+  file:
+      path: "/var/run/docker-{{ username }}.sock"
+      owner: "{{ username }}"
+      group: "{{ username }}"
+      mode: "0660"
+
+- name: "{{ username }}: Test Docker by running a container for user"
+  command: "docker run -d hello-world"
+  environment:
+      DOCKER_HOST: "unix:///var/run/docker-{{ username }}.sock"

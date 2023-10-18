@@ -1,57 +1,120 @@
-# Docker Setup for User
+# Multi Docker Users
 
-This repository contains a script that automates the setup of an isolated
-Docker daemon for a user.
+This repository contains multiple Ansible playbooks for managing multiple users within the hive simulation server.
 
-It allows different users to use there own isolated Docker instance,
-as opposed to sharing one instance between multiple users.
+It allows for multiple users to use there own isolated Docker instance, as opposed to sharing one instance between multiple users avoiding a multitude of conflicts.
 
-To give you an example, we are required to do this, as we are using separate
-[hive](https://github.com/ethereum/hive) instances per user on our server. Hive
-uses docker containers for each of its simulations hence we may disrupt another users
-simulation if we are sharing a docker instance (daemon).
-
+We are required to do this to run separate [hive](https://github.com/ethereum/hive) instances per user on our server.
+Hive uses docker containers for each of its simulations hence we may disrupt another users simulation if we are sharing a docker instance.
 
 ## Usage
 
-From your user account on the server, follow these instructions.
+As we are using Ansible, alterations to users on the server must be changed by running the playbooks locally.
 
+### Setting up for Ansible
 
-### New Users
+After cloning the repo locally, install Ansible (and Python):
 
-#### Update your bashrc (or equivalent)
+On Ubuntu/Debian:
 
-Add the following line to your bashrc.
 ```bash
-export DOCKER_HOST=unix:///var/run/docker-$USER.sock
-```
-Refresh bashrc:
-```bash
-source .bashrc
-```
-This forces your docker host to point to your own unique docker socket.
-
-
-#### Run the script
-
-The remaining magic is done within the following script.
-```bash
-git clone <repository-url>
-cd 
-chmod +x setup_user_docker.sh
-./setup_user_docker.sh
+sudo apt update
+sudo apt install python3 python3-pip
+pip3 install ansible
+ansible --version
 ```
 
-### Resetting Docker
+On MacOS:
 
-To refresh & reset your docker users docker instance.
 ```bash
-docker system prune -a
-```
-This will remove all stopped containers and the created user bridge.
-
-Re-run the script:
-```bash
-./setup_user_docker.sh
+brew install python
+brew update
+brew install ansible
+ansible --version
 ```
 
+Create an inventory file, for access to the server:
+
+```bash
+git clone git@github.com:spencer-tb/multi-docker-users.git
+cd multi-docker-users
+echo -e "[all]\n<SERVER_IP> ansible_ssh_user=<ROOT_USER>" > inventory.ini
+```
+
+Replace "SERVER_IP" with the IP address of the server and "ROOT_USER" with a root user that exists within the server.
+
+### Creating a new user
+
+To create a new user on the server we run the `setup_new_user.yml` playbook:
+
+```bash
+ansible-playbook -i inventory.ini setup_new_user.yml --extra-vars "username=<NEW_USER>"
+```
+
+Upon running the playbook, a prompt for the user password and ssh public key will appear. These are required for access to the newly user created on the server.
+
+The entire public key must be added to the prompt like the following below:
+
+```bash
+Enter the password for the new user: 
+confirm Enter the password for the new user: 
+Enter the public SSH key for the new user: ssh-ed25519 AAAAC3NzaC1lZ...tzDLUiXeXHv6BaFQ082lpy hello@hello
+```
+
+### Reconfiguring docker for an existing user
+
+If we need to reconfigure docker for an existing user, due to un-forseen changes on the server, we can run run the `config_single_docker_user.yml` playbook:
+
+```bash
+ansible-playbook -i inventory.ini config_single_docker_user.yml --extra-vars "username=<NEW_USER>"
+```
+
+Note "NEW_USER" must already exist on the server.
+
+Docker data for that user will be deleted, including images, containers, volumes, and network configurations, before reconfiguring.
+
+### Reconfiguring docker all users on the server
+
+If we need to reconfigure docker for all users, we can run run the `config_multi_docker_users.yml` playbook:
+
+```bash
+ansible-playbook -i inventory.ini config_multi_docker_users.yml
+```
+
+Docker data for all users will be deleted, including images, containers, volumes, and network configurations, before reconfiguring.
+
+### Removing an existing user
+
+If we want to remove an existing user on the server, we can run run the `remove_existing_user.yml` playbook:
+
+```bash
+ansible-playbook -i inventory.ini remove_existing_user.yml --extra-vars "username=<EXISTING_USER>"
+```
+
+Note "EXISTING_USER" must already exist on the server.
+
+All user related data for will be deleted, including docker related data.
+
+## Playbook Structure
+
+`config_multi_docker_users.yml`, `config_single_docker_user.yml` and `setup_new_user.yml` run all the tasks within `docker_setup_tasks.yml`.
+
+`docker_setup_tasks.yml` utilizes the parameterized files `docker_daemon.json.j2` and `docker_service.j2` within its tasks.
+
+```code
+├── config_multi_docker_users.yml
+│   └──docker_setup_tasks.yml
+│       ├── docker_daemon.json.j2
+│       └── docker_service.j2
+├── config_single_docker_user.yml
+│   └──docker_setup_tasks.yml
+│       ├── docker_daemon.json.j2
+│       └── docker_service.j2
+├── setup_new_user.yml
+│   └──docker_setup_tasks.yml
+│       ├── docker_daemon.json.j2
+│       └── docker_service.j2
+└── remove_existing_user.yml
+```
+
+The dependence of `docker_setup_tasks.yml`, `docker_daemon.json.j2` and `docker_service.j2` allows for easier maintainability of the playbooks.

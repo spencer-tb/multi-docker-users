@@ -1,0 +1,10 @@
+[Unit]
+Description=Docker Daemon for {{ username }}
+After=network.target docker.socket
+Requires=docker.socket
+
+[Service]
+ExecStart=/usr/sbin/dockerd -H unix:///var/run/docker-{{ username }}.sock --group {{ username }} --config-file /etc/docker/{{ username }}/daemon.json --pidfile /var/run/docker-{{ username }}.pid
+
+[Install]
+WantedBy=multi-user.target

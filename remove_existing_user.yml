@@ -1,0 +1,77 @@
+# ansible-playbook -i inventory.ini remove_existing_user.yml --extra-vars "username=myuser"
+---
+- name: Remove a user from the server
+  hosts: all
+  become: yes
+  gather_facts: true
+
+  vars_prompt:
+      - name: "username"
+        prompt: "Enter the username of the user to be removed"
+        private: no
+
+  tasks:
+      - name: "{{ username }}: Ensure username variable is provided"
+        assert:
+            that:
+                - username | length > 0
+            msg: "'username' variable must be provided."
+
+      - name: "{{ username }}: Check if user exists on the server"
+        command: "getent passwd {{ username }}"
+        register: getent_before
+        failed_when: false
+        changed_when: false
+
+      - name: "{{ username }}: Fail if user doesn't exist (should skip)"
+        fail:
+            msg: "The user '{{ username }}' does not exist on the server."
+        when: getent_before.rc != 0
+
+      - name: "{{ username }}: Remove user-specific docker directory"
+        file:
+            path: "/var/lib/docker-{{ username }}"
+            state: absent
+
+      - name: "{{ username }}: Remove existing user-specific daemon.json and directory"
+        file:
+            path: "/etc/docker/{{ username }}"
+            state: absent
+
+      - name: "{{ username }}: Remove user-specific docker service file"
+        file:
+            path: "/etc/systemd/system/docker-{{ username }}.service"
+            state: absent
+
+      - name: "{{ username }}: Check if IP link exists and delete if it does"
+        shell: "ip link show {{ username }} && ip link delete {{ username }}"
+        ignore_errors: true
+        failed_when: false
+
+      - name: "{{ username }}: Kill all processes owned by the user"
+        shell: pkill -u {{ username }} || echo "No processes found for {{ username }}"
+        ignore_errors: true
+
+      - name: "{{ username }}: Remove the user from the server"
+        user:
+            name: "{{ username }}"
+            state: absent
+            remove: yes
+
+      - name: "{{ username }}: Remove the user from the sudoers file"
+        lineinfile:
+            path: "/etc/sudoers"
+            line: "{{ username }} ALL=(ALL) NOPASSWD:ALL"
+            state: absent
+        ignore_errors: true
+
+      - name: "{{ username }}: Check if user still exists on the server after removal"
+        command: "getent passwd {{ username }}"
+        register: getent_after
+        failed_when: false
+        changed_when: false
+
+      - name: "{{ username }}: Fail if user still exists after attempt to remove (should skip)"
+        fail:
+            msg: "The user '{{ username }}' still exists on the server after the attempt to remove."
+        when: getent_after.rc == 0
