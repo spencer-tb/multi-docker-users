@@ -1,4 +1,4 @@
-# ansible-playbook -i inventory.ini config_multi_docker_users.yml
+# ansible-playbook -i inventory/inventory.ini roles/user_setup/tasks/config_multi_docker_users.yml
 ---
 - name: Setup Docker for multiple users
   hosts: all

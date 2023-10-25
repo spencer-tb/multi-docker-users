@@ -1,4 +1,4 @@
-# Used within setup_new_user.yml, config_single_docker_user.yml and config_multi_docker_users.yml
+# Used within tasks/setup_new_user.yml,config_single_docker_user.yml,config_multi_docker_users.yml
 ---
 - set_fact:
       rc_files:
@@ -76,7 +76,7 @@
 
 - name: "{{ username }}: Set up new docker daemon.json for user"
   template:
-      src: "docker_daemon.json.j2"
+      src: "../templates/docker_daemon.json.j2"
       dest: "/etc/docker/{{ username }}/daemon.json"
       owner: "{{ username }}"
       group: "{{ username }}"
@@ -89,7 +89,7 @@
 
 - name: "{{ username }}: Set up new systemd service for Docker for user"
   template:
-      src: "docker_service.j2"
+      src: "../templates/docker_service.j2"
       dest: "/etc/systemd/system/docker-{{ username }}.service"
       owner: "{{ username }}"
       group: "{{ username }}"
