@@ -1,3 +1,4 @@
+# ansible-playbook -i inventory.ini roles/user_setup/tasks/setup_new_user.yml --extra-vars "username=myuser"
 ---
 - name: Add a new user to the server
   hosts: all

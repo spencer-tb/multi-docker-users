@@ -1,4 +1,4 @@
-# ansible-playbook -i inventory/inventory.ini roles/user_setup/tasks/config_single_docker_user.yml --extra-vars "username=myuser"
+# ansible-playbook -i inventory.ini roles/user_setup/tasks/config_single_docker_user.yml --extra-vars "username=myuser"
 ---
 - name: Setup Docker for a single user
   hosts: all

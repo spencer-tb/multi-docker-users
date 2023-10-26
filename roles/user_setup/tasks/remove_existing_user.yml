@@ -1,3 +1,4 @@
+# ansible-playbook -i inventory.ini roles/user_setup/tasks/remove_existing_user.yml --extra-vars "username=myuser"
 ---
 - name: Remove a user from the server
   hosts: all
@@ -27,16 +28,43 @@
             msg: "The user '{{ username }}' does not exist on the server."
         when: getent_before.rc != 0
 
+      - name: "{{ username }}: Get list of all containers associated with the user"
+        command: "docker -H unix:///var/run/docker-{{ username }}.sock ps -aq"
+        register: user_containers
+        ignore_errors: true
+        changed_when: false
+
+      - name: "{{ username }}: Stop all containers associated with the user"
+        command: "docker -H unix:///var/run/docker-{{ username }}.sock stop {{ item }}"
+        with_items: "{{ user_containers.stdout_lines }}"
+        when: user_containers.stdout_lines is defined and user_containers.stdout_lines|length > 0
+
       - name: "{{ username }}: Remove user-specific docker directory"
         file:
             path: "/var/lib/docker-{{ username }}"
             state: absent
 
+      - name: "{{ username }}: Get subUID of the user from /etc/subuid"
+        shell: 'grep "^{{ username }}:" /etc/subuid | cut -d: -f2'
+        register: user_subuid
+        changed_when: false
+        ignore_errors: true
+
+      - name: "{{ username }}: Remove user-specific docker data root, pid, and sock"
+        file:
+          path: "{{ item }}"
+          state: absent
+        loop:
+          - "/var/run/docker.{{ user_subuid.stdout }}.{{ user_subuid.stdout }}"
+          - "/var/run/docker-{{ username }}.pid"
+          - "/var/run/docker-{{ username }}.sock"
+        when: user_subuid.rc == 0
+
       - name: "{{ username }}: Remove existing user-specific daemon.json and directory"
         file:
             path: "/etc/docker/{{ username }}"
             state: absent
-
+      
       - name: "{{ username }}: Remove user-specific docker service file"
         file:
             path: "/etc/systemd/system/docker-{{ username }}.service"
