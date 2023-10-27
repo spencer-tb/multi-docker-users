@@ -1,0 +1,139 @@
+#!/bin/bash
+
+HIVEHOME="{{ hive_src_dir }}"
+RESULTS="{{ hive_results_dir }}"
+WWWDIR="{{ hive_www_dir }}"
+HIVEVERSION="{{ hive_version }}"
+HIVEREMOTE="{{ hive_remote_name }}"
+
+FLAGS="$FLAGS --results-root $RESULTS"
+FLAGS="$FLAGS --sim.loglevel 3"
+
+# Loglevel 3 disables container output
+FLAGS="$FLAGS --loglevel 3"
+
+# Clients
+RUNNING_ELS="{{ hive_el_clients }}"
+
+# Force hive using user specific docker conf
+export DOCKER_HOST=unix:///var/run/docker-{{ hive_user }}.sock
+
+function combinations {
+    x=("$@")
+    for ((i=0; i<$#; i++)); do
+        for ((j=i+1; j<$#; j++)); do
+        echo "${x[i]} ${x[j]}"
+        done
+    done
+}
+
+function updateIndex {
+    ( cd $HIVEHOME \
+        && ./hiveview -listing -logdir "$RESULTS" > "${WWWDIR}/listing.jsonl.tmp" \
+        && cp "${WWWDIR}/listing.jsonl.tmp" "${WWWDIR}/listing.jsonl" )
+}
+
+#function updateRepo {
+#    ( cd $HIVEHOME \
+#        && git fetch "${HIVEREMOTE}" \
+#        && git checkout "${HIVEREMOTE}/${HIVEVERSION}" )
+#}
+
+function test_engine_api_cancun_el {
+    echo "$(date) Starting Engine API Cancun tests: EL [$1]"
+    ./hive --sim 'ethereum/engine' --sim.limit 'engine-cancun/' --client-file "$HIVEHOME/configs/cancun.yaml" --client "$1" --client.checktimelimit=60s --sim.timelimit=90m $FLAGS --sim.parallelism 8
+    updateIndex
+}
+
+function test_engine_ex_caps {
+    echo "$(date) Starting Engine API Exchange Capabilities tests: EL [$1]"
+    ./hive --sim 'ethereum/engine' --sim.limit 'engine-exchange-capabilities/' --client-file "$HIVEHOME/configs/cancun.yaml" --client "$1" --client.checktimelimit=60s --sim.timelimit=10m $FLAGS --sim.parallelism 8
+    updateIndex
+}
+
+function test_pyspec_el {
+    echo "$(date) Starting Pyspec Cancun Consensus tests: EL [$1]"
+    ./hive --sim 'ethereum/pyspec' --client-file "$HIVEHOME/configs/cancun.yaml" --client "$1" --client.checktimelimit=60s --sim.timelimit=120m $FLAGS --sim.parallelism 16
+    updateIndex
+}
+
+function cleanLogs {
+    echo "$(date) cleaning up test results"
+    ./hiveview -gc -logdir "$RESULTS" -keep 720h # (30 days)
+}
+
+function cleanDocker {
+    echo "$(date) cleaning up docker"
+
+    # We need to ensure that none of the docker images that were started by hive lingers.
+    # But we need to take care not to remove the following container:
+    # - telegraf, logsprout/papertrail
+    # - nginx-hive
+    # - letsencrypt-nginx-proxy-companion
+    # - nginx-proxy
+
+    EXCLUSIONS="telegraf\|nginx\|logsprout\|papertrail\|rsyslog"
+    sudo docker stop  $(docker ps -a | grep -v $EXCLUSIONS | cut -d" " -f1)
+    sudo docker system prune --volumes -f
+    echo "$(date) cleaning up docker done"
+}
+
+function getPreviousCommit {
+    local client="$1"
+    local file="/tmp/${client}_commit.txt"
+    if [[ -f "$file" ]]; then
+        cat "$file"
+    else
+        echo ""
+    fi
+}
+
+function storeCommit {
+    local client="$1"
+    local commit="$2"
+    echo "$commit" > "/tmp/${client}_commit.txt"
+}
+
+function handleClient {
+    local client="$1"
+    
+    # Fetch the latest SHA for repo and branch/tag
+    local repo_url=$(grep -A5 "client: ${client}" "${HIVEHOME}/configs/cancun.yaml" | grep "github" | awk -F': ' '{print $2}' | tr -d ' ')
+    local repo_tag=$(grep -A5 "client: ${client}" "${HIVEHOME}/configs/cancun.yaml" | grep "tag" | awk -F': ' '{print $2}' | tr -d ' ')
+    local latest_commit=$(git ls-remote "https://github.com/${repo_url}.git" "${repo_tag}" | cut -f 1)
+
+    # Check if we have a stored commit SHA for the client
+    local prev_commit=$(getPreviousCommit "$client")
+    if [[ -z "${prev_commit}" || "${prev_commit}" != "${latest_commit}" ]]; then
+        echo "$(date) Updates found for ${client}. Updating client Docker container and running tests."
+
+        # Update the stored commit SHA for the client
+        storeCommit "$client" "$latest_commit"
+
+        # Fetch the Docker image for the updated client
+        ./hive --docker.pull --docker.nocache --client-file "$HIVEHOME/configs/cancun.yaml" --client "${client}"
+
+        # Run the tests
+        #test_engine_api_cancun_el "${client}"
+        test_engine_ex_caps "${client}"
+        #test_pyspec_el "${client}"
+    else
+        echo "$(date) No updates found for ${client}. Skipping tests."
+    fi
+}
+
+cd $HIVEHOME
+
+while true
+do
+    cleanDocker
+    cleanLogs
+
+    for client in $RUNNING_ELS; do
+        handleClient "$client"
+    done
+
+    #updateRepo
+
+    sleep 3
+done

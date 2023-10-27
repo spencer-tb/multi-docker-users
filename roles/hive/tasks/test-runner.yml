@@ -1,0 +1,38 @@
+---
+- name: Run webserver
+  docker_container:
+    name: "nginx-hive"
+    image: "nginx:1.17.3-alpine"
+    env: "{{ hive_www_env }}"
+    published_ports:
+      - "8080:80"
+    restart_policy: always
+    volumes:
+      - "{{ hive_www_dir }}:/usr/share/nginx/html"
+      - "{{ hive_results_dir }}:/usr/share/nginx/html/results"
+    docker_host: "unix://var/run/docker-{{ hive_user }}.sock"
+  tags: hive-www
+
+- name: Copy hive runner script
+  template:
+    src: "{{ hive_script }}"
+    dest: "{{ hive_scripts_dir }}/hive-runner.sh"
+    mode: 744
+
+- name: Create hive service
+  template:
+    src: hive.service.j2
+    dest: /lib/systemd/system/hive.service
+    mode: 644
+  become_user: root
+
+- name: Reload systemctl
+  command: systemctl daemon-reload
+  become_user: root
+
+- name: Start and enable hive service
+  service:
+    name: hive.service
+    state: restarted
+    enabled: yes
+  become_user: root

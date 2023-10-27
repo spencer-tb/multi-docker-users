@@ -1,0 +1,41 @@
+---
+- name: Stop hive service
+  service:
+    name: hive.service
+    state: stopped
+
+- name: Remove hive service file
+  file:
+    path: /lib/systemd/system/hive.service
+    state: absent
+
+- name: Stop nginx-hive container
+  docker_container:
+    name: "nginx-hive"
+    state: absent
+    docker_host: "unix://var/run/docker-{{ hive_user }}.sock"
+
+- name: Remove nginx-hive container
+  docker_container:
+    name: "nginx-hive"
+    state: absent
+    volumes:
+      - "{{ hive_www_dir }}:/usr/share/nginx/html"
+      - "{{ hive_results_dir }}:/usr/share/nginx/html/results"
+    docker_host: "unix://var/run/docker-{{ hive_user }}.sock"
+
+- name: Docker system full prune
+  become: yes
+  command: "docker -H unix:///var/run/docker-{{ hive_user }}.sock system prune -f -a"
+  ignore_errors: true
+
+- name: Remove hive directories
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ hive_src_dir }}"
+    - "{{ hive_www_dir }}"
+    - "{{ hive_scripts_dir }}"
+    - "{{ hive_results_dir }}"
+    - "{{ hive_log_dir }}"

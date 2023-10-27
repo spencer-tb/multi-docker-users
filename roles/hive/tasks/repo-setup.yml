@@ -1,0 +1,30 @@
+---
+- name: Fetch hive git repo
+  git:
+    repo: "{{ hive_repository }}"
+    dest: "{{ hive_src_dir }}"
+    version: "{{ hive_version }}"
+    remote: "{{ hive_remote_name }}"
+    force: yes
+    update: yes
+  register: repo
+
+- name: Add Git safe.directory configuration
+  command:
+    cmd: "git config --global --add safe.directory {{ hive_src_dir }}"
+
+- name: Build hive and hiveview commands
+  shell: "/usr/local/go/bin/go build {{ item }}"
+  args:
+    chdir: "{{ hive_src_dir }}"
+    executable: /bin/bash
+  loop:
+    - "." # hive
+    - "./cmd/hiveview"
+  when: repo.changed
+
+- name: Deploy frontend
+  command:
+    argv: ["{{ hive_src_dir }}/hiveview", "-deploy", "{{ hive_www_dir }}"]
+  become: yes
+  when: repo.changed

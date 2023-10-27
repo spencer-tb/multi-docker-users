@@ -1,0 +1,32 @@
+---
+- name: Ensure {{ hive_user }} user exists
+  user:
+    name: "{{ hive_user }}"
+    state: present
+
+- name: Reset hive setup
+  import_tasks: reset-hive.yml
+  become_user: root
+  when: reset
+
+- name: Create directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0777
+    owner: "{{ hive_user }}"
+    group: "{{ hive_user }}"
+  loop:
+    - "{{ hive_src_dir }}"
+    - "{{ hive_www_dir }}"
+    - "{{ hive_scripts_dir }}"
+    - "{{ hive_results_dir }}"
+    - "{{ hive_log_dir }}"
+
+- name: Re/build hive & hiveview
+  import_tasks: repo-setup.yml
+
+- name: Create hiveview webserver & test runner service
+  import_tasks: test-runner.yml
+
+

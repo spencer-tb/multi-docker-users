@@ -1,0 +1,22 @@
+[Unit]
+Description=Ethereum Hive
+Requires=network.target
+After=syslog.target network.target
+
+[Service]
+# The StandardOutput file:xx does not append to the file, but rather writes
+# into the existing file (gradually overwriting from the beginning). 
+# This causes the papertail logging to fail, since it can only detect appends, not 
+# replacements.
+#
+# There is a newer syntax. StandardOutput=append:xx , but that does not seem to be supported
+# on the ubuntu version in prod, so instead this ExecStartPre is used to 
+# clean out the first file. 
+# 
+ExecStartPre=/bin/bash -c 'rm {{ hive_log_dir }}/{{ hive_log_file }}'
+ExecStart={{ hive_scripts_dir }}/hive-runner.sh
+StandardOutput=file:{{ hive_log_dir }}/{{ hive_log_file }}
+StandardError=file:{{ hive_log_dir }}/{{ hive_log_file }}
+
+[Install]
+WantedBy=multi-user.target

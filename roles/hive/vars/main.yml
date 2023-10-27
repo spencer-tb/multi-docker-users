@@ -1,0 +1,16 @@
+hive_repository: https://github.com/spencer-tb/hive.git
+hive_version: hive-tests-server
+hive_remote_name: origin
+
+hive_user: hive-tests
+hive_src_dir: "/home/{{ hive_user }}/hive-src"
+hive_scripts_dir: "/home/{{ hive_user }}/hive-scripts"
+hive_www_dir: "/home/{{ hive_user }}/hive-hiveview"
+hive_results_dir: "/home/{{ hive_user }}/hive-results"
+hive_log_dir: "/home/{{ hive_user }}/hive-service-logs"
+hive_log_file: hive.log
+
+hive_www_env: {}
+
+hive_script: hive-cancun.sh.j2
+hive_el_clients: go-ethereum #nethermind erigon besu ethereumjs reth

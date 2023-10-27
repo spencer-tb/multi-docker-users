@@ -1,0 +1,7 @@
+---
+- name: Setup Hive Tests
+  hosts: all
+  become: yes
+  become_user: "{{ hive_user }}"
+  roles:
+    - role: hive
