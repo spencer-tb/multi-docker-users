@@ -99,7 +99,7 @@ function handleClient {
     
     # Fetch the latest SHA for repo and branch/tag
     local repo_url=$(grep -A5 "client: ${client}" "${HIVEHOME}/configs/cancun.yaml" | grep "github" | awk -F': ' '{print $2}' | tr -d ' ')
-    local repo_tag=$(grep -A5 "client: ${client}" "${HIVEHOME}/configs/cancun.yaml" | grep "tag" | awk -F': ' '{print $2}' | tr -d ' ')
+    local repo_tag=$(awk -v client="$client" '/client: '"$client"'/ {flag=1; next} flag && /build_args:/ {flag=2; next} flag==2 && /tag:/ {print $2; flag=0; exit}' "${HIVEHOME}/configs/cancun.yaml" | tr -d ' ')
     local latest_commit=$(git ls-remote "https://github.com/${repo_url}.git" "${repo_tag}" | cut -f 1)
 
     # Check if we have a stored commit SHA for the client
@@ -130,10 +130,11 @@ do
     cleanLogs
 
     for client in $RUNNING_ELS; do
-        handleClient "$client"
+        handleClient "$client" &
     done
+    wait
 
     #updateRepo
 
-    sleep 3
+    sleep 3600
 done

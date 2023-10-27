@@ -1,5 +1,5 @@
 hive_repository: https://github.com/spencer-tb/hive.git
-hive_version: hive-tests-server
+hive_version: master
 hive_remote_name: origin
 
 hive_user: hive-tests
@@ -13,4 +13,4 @@ hive_log_file: hive.log
 hive_www_env: {}
 
 hive_script: hive-cancun.sh.j2
-hive_el_clients: go-ethereum #nethermind erigon besu ethereumjs reth
+hive_el_clients: go-ethereum nethermind erigon besu ethereumjs reth
